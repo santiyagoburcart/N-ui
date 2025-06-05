@@ -17,13 +17,6 @@
 
 > **Disclaimer:** This project is only for personal learning and communication, please do not use it for illegal purposes. Using it in a production environment is at your own risk.
 
-**If this project is helpful to you, you may wish to give it a**:star2:
-
-<p align="left">
-  <a href="https://buymeacoffee.com/mhsanaei" target="_blank">
-    <img src="./media/buymeacoffe.png" alt="Buy Me A Coffee">
-  </a>
-</p>
 
 
 ## ✨ New Frontend!
