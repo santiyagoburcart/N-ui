@@ -5,6 +5,7 @@ WORKDIR /app
 
 # Copy go.mod and go.sum and download dependencies
 COPY go.mod go.sum ./
+RUN apk add --no-cache gcc musl-dev sqlite-dev
 RUN go mod download
 
 # Copy the rest of the application source code
@@ -15,12 +16,25 @@ COPY . .
 # The original entrypoint seems to be related to x-ui.sh or DockerEntrypoint.sh
 # We need to ensure the binary is built correctly.
 # For 3x-ui, the main.go seems to be the entry point.
-RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o /app/x-ui main.go
+RUN CGO_ENABLED=1 GOOS=linux go build -a -installsuffix cgo -o /app/x-ui main.go
 
 # Stage 2: Production environment
 FROM alpine:latest
 
 WORKDIR /app
+RUN mkdir -p /app/bin
+ARG XRAY_VERSION=v1.8.11
+ARG TARGETARCH=amd64
+# Use Xray-linux-64.zip for amd64 architecture as per Xray release naming
+RUN wget -O /tmp/Xray-linux-64.zip https://github.com/XTLS/Xray-core/releases/download/${XRAY_VERSION}/Xray-linux-64.zip && \
+    unzip /tmp/Xray-linux-64.zip -d /app/bin xray geoip.dat geosite.dat && \
+    mv /app/bin/xray /app/bin/xray-linux-${TARGETARCH} && \
+    chmod +x /app/bin/xray-linux-${TARGETARCH} && \
+    rm /tmp/Xray-linux-64.zip
+
+RUN mkdir -p /app/log && \
+    touch /app/log/3xipl.log && \
+    touch /app/log/3xipl-banned.log
 
 # Copy the binary from the builder stage
 COPY --from=builder /app/x-ui /app/x-ui
@@ -33,6 +47,7 @@ COPY --from=builder /app/config/version /app/config/version
 # Ensure necessary directories exist and have correct permissions if needed by the app
 # The original compose file mounts $PWD/db/:/etc/x-ui/ and $PWD/cert/:/root/cert/
 # So, these paths should be available or created by the entrypoint script.
+RUN apk add --no-cache sqlite fail2ban
 RUN mkdir -p /etc/x-ui && \
     mkdir -p /root/cert && \
     chmod +x /app/x-ui.sh /app/DockerEntrypoint.sh /app/x-ui
@@ -43,6 +58,9 @@ RUN mkdir -p /etc/x-ui && \
 # Let's assume the Go app listens on a port defined by an ENV or config, e.g., 2053
 EXPOSE 2053
 
+COPY 3x-ipl.filter.conf /etc/fail2ban/filter.d/3x-ipl.conf
+COPY 3x-ipl.action.conf /etc/fail2ban/action.d/3x-ipl.conf
+COPY xui_fail2ban.local /etc/fail2ban/jail.local
 # Entrypoint
 ENTRYPOINT ["/app/DockerEntrypoint.sh"]
 CMD ["/app/x-ui"] # Default command if DockerEntrypoint.sh doesn't override
